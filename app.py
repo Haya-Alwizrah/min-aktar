@@ -779,11 +779,7 @@ def display_page():
             )
 
             st.markdown(
-                """
-                <h3 style='text-align:center;'>
-                    امسح QR Code للدخول
-                </h3>
-                """,
+                """<h3 style='text-align:center;'>امسح QR Code للدخول</h3>""",
                 unsafe_allow_html=True
             )
 
@@ -922,27 +918,14 @@ def display_page():
 
 
         st.markdown(
-
             f"""
             <div class="question-card">
-
-                <div class="question-text">
-                    {question["question"]}
-                </div>
-
-                <div class="timer">
-                    {remaining}
-                </div>
-
-                <div style="color:#777;">
-                    ثانية متبقية
-                </div>
-
+                <div class="question-text">{question["question"]}</div>
+                <div class="timer">{remaining}</div>
+                <div style="color:#777;">ثانية متبقية</div>
             </div>
             """,
-
             unsafe_allow_html=True
-
         )
 
 
@@ -999,19 +982,12 @@ def display_page():
 
 
         st.markdown(
-
             f"""
             <div class="question-card">
-
-                <div class="question-text">
-                    {question["question"]}
-                </div>
-
+                <div class="question-text">{question["question"]}</div>
             </div>
             """,
-
             unsafe_allow_html=True
-
         )
 
 
@@ -1386,11 +1362,8 @@ def student_page():
 
     st.markdown(
         f"""
-        <div class="main-title">
-            مرحبًا {student}
-        </div>
+        <div class="main-title">مرحبًا {student}</div>
         """,
-
         unsafe_allow_html=True
 
     )
