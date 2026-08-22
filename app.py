@@ -1,14 +1,12 @@
 import io
 import random
 from datetime import datetime, timezone, timedelta
-
 import pandas as pd
 import plotly.express as px
 import qrcode
 import streamlit as st
 from supabase import create_client
 from streamlit_autorefresh import st_autorefresh
-
 
 # ============================================================
 # CONFIG
@@ -827,57 +825,32 @@ def display_page():
         col1, col2, col3 = st.columns(3)
 
         with col1:
-
-            st.markdown(
-                f"""
+            st.markdown(f"""
                 <div class="stat-card">
-
-                    <div class="stat-number">
-                        {joined_count}
-                    </div>
-
-                    <div class="stat-label">
-                        المشاركون
-                    </div>
-
+                    <div class="stat-number">{joined_count}</div>
+                    <div class="stat-label">المشاركون</div>
                 </div>
                 """,
                 unsafe_allow_html=True
             )
 
         with col2:
-
             st.markdown(
                 f"""
                 <div class="stat-card">
-
-                    <div class="stat-number">
-                        {len(questions)}
-                    </div>
-
-                    <div class="stat-label">
-                        الأسئلة المكتوبة
-                    </div>
-
+                    <div class="stat-number">{len(questions)}</div>
+                    <div class="stat-label">الأسئلة المكتوبة</div>
                 </div>
                 """,
                 unsafe_allow_html=True
             )
 
         with col3:
-
             st.markdown(
                 f"""
                 <div class="stat-card">
-
-                    <div class="stat-number">
-                        {len(unused)}
-                    </div>
-
-                    <div class="stat-label">
-                        الأسئلة المتبقية
-                    </div>
-
+                    <div class="stat-number">{len(unused)}</div>
+                    <div class="stat-label">الأسئلة المتبقية</div>
                 </div>
                 """,
                 unsafe_allow_html=True
