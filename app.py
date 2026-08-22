@@ -859,34 +859,18 @@ def display_page():
 
         st.divider()
 
-
         if not unused:
-
-            st.warning(
-                "لا توجد أسئلة جاهزة لبدء الفعالية."
-            )
-
+            st.warning("لا توجد أسئلة جاهزة لبدء الفعالية.")
 
         if st.button(
-
             "🚀 ابدأ الفعالية",
-
             use_container_width=True,
-
             type="primary"
 
         ):
-
             if unused:
-
-                question = random.choice(
-                    unused
-                )
-
-                start_question(
-                    question["id"]
-                )
-
+                question = random.choice(unused)
+                start_question(question["id"])
                 st.rerun()
 
 
@@ -902,9 +886,7 @@ def display_page():
 
         if not question:
 
-            st.error(
-                "تعذر العثور على السؤال."
-            )
+            st.error("تعذر العثور على السؤال.")
 
             return
 
@@ -1403,7 +1385,6 @@ def student_page():
 
 
     st.markdown(
-
         f"""
         <div class="main-title">
             مرحبًا {student}
@@ -1438,58 +1419,32 @@ def student_page():
         if previous_question:
 
             st.markdown(
-
                 """
                 <div class="success-card">
-
                     <h3>✓ تم إرسال سؤالك</h3>
-
-                    <p>
-                        لا يمكنك إرسال سؤال آخر.
-                    </p>
-
-                    <p>
-                        انتظري حتى تبدأ الجولة.
-                    </p>
-
+                    <p>لا يمكنك إرسال سؤال آخر.</p>
+                    <p>انتظري حتى تبدأ الجولة.</p>
                 </div>
                 """,
-
                 unsafe_allow_html=True
-
             )
 
 
             st.markdown(
-
                 f"""
                 <div class="question-card">
-
-                    <strong>
-                        سؤالك:
-                    </strong>
-
+                    <strong>سؤالك:</strong>
                     <br><br>
-
                     {previous_question["question"]}
-
                 </div>
                 """,
-
                 unsafe_allow_html=True
-
             )
-
 
         else:
-
-            st.info(
-                "اكتبي سؤالًا واحدًا فقط للعبة."
-            )
-
+            st.info("اكتبي سؤالًا واحدًا فقط للعبة.")
 
             question = st.text_area(
-
                 "السؤال",
 
                 placeholder=(
@@ -1603,33 +1558,14 @@ def student_page():
 
 
         st.markdown(
-
             f"""
             <div class="question-card">
-
-                <div class="question-text"
-                     style="font-size:1.8rem;">
-
-                    {question["question"]}
-
-                </div>
-
-                <div class="timer"
-                     style="font-size:3rem;">
-
-                    {remaining}
-
-                </div>
-
-                <div>
-                    ثانية متبقية
-                </div>
-
+                <div class="question-text" style="font-size:1.8rem;">{question["question"]}</div>
+                <div class="timer" style="font-size:3rem;">{remaining}</div>
+                <div>ثانية متبقية</div>
             </div>
             """,
-
             unsafe_allow_html=True
-
         )
 
 
@@ -1645,19 +1581,12 @@ def student_page():
         if already_voted:
 
             st.markdown(
-
                 """
                 <div class="success-card">
-
                     <h3>✓ تم تسجيل تصويتك</h3>
-
-                    <p>
-                        انتظري ظهور النتيجة.
-                    </p>
-
+                    <p>انتظري ظهور النتيجة.</p>
                 </div>
                 """,
-
                 unsafe_allow_html=True
 
             )
@@ -1757,21 +1686,12 @@ def student_page():
     elif state["status"] == "result":
 
         st.markdown(
-
             """
             <div class="success-card">
-
-                <h3>
-                    انتهى التصويت ✓
-                </h3>
-
-                <p>
-                    انتظري السؤال التالي.
-                </p>
-
+                <h3>انتهى التصويت ✓</h3>
+                <p>انتظري السؤال التالي.</p>
             </div>
             """,
-
             unsafe_allow_html=True
 
         )
