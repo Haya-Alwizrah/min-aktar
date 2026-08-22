@@ -19,7 +19,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-VOTING_SECONDS = 10
+VOTING_SECONDS = 30
 
 
 # ============================================================
@@ -966,7 +966,7 @@ def display_page():
 
         st_autorefresh(
 
-            interval=1000,
+            interval=2000,
 
             key=f"display_voting_{question['id']}"
 
@@ -1672,7 +1672,7 @@ def student_page():
 
         st_autorefresh(
 
-            interval=1000,
+            interval=2000,
 
             key=f"student_voting_{question['id']}"
 
