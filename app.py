@@ -152,6 +152,7 @@ header {
 
 @st.cache_resource
 def get_supabase():
+
     return create_client(
         st.secrets["SUPABASE_URL"],
         st.secrets["SUPABASE_KEY"]
@@ -174,6 +175,7 @@ if "student_name" not in st.session_state:
 # ============================================================
 
 def get_students():
+
     response = (
         supabase
         .table("students")
@@ -186,6 +188,7 @@ def get_students():
 
 
 def get_game_state():
+
     response = (
         supabase
         .table("game_state")
@@ -199,6 +202,7 @@ def get_game_state():
 
 
 def get_questions():
+
     response = (
         supabase
         .table("questions")
@@ -211,6 +215,7 @@ def get_questions():
 
 
 def get_current_question(question_id):
+
     if question_id is None:
         return None
 
@@ -227,6 +232,7 @@ def get_current_question(question_id):
 
 
 def get_votes(question_id):
+
     response = (
         supabase
         .table("votes")
@@ -238,10 +244,11 @@ def get_votes(question_id):
     return response.data or []
 
 
+# ============================================================
+# STUDENT HISTORY
+# ============================================================
+
 def get_student_question(student):
-    """
-    Returns the question previously submitted by this student.
-    """
 
     response = (
         supabase
@@ -259,9 +266,6 @@ def get_student_question(student):
 
 
 def has_voted(question_id, student):
-    """
-    Checks whether this student already voted for this question.
-    """
 
     response = (
         supabase
@@ -276,29 +280,34 @@ def has_voted(question_id, student):
     return bool(response.data)
 
 
+# ============================================================
+# JOINED STUDENTS
+# ============================================================
+
 def mark_student_joined(student):
-    """
-    Saves that this student entered the game.
-    Requires students.joined_at column.
-    """
 
     try:
+
         supabase.table("students").update({
-            "joined_at": datetime.now(timezone.utc).isoformat()
-        }).eq("name", student).execute()
+            "joined_at": datetime.now(
+                timezone.utc
+            ).isoformat()
+        }).eq(
+            "name",
+            student
+        ).execute()
+
+        return True
 
     except Exception:
-        # If the column does not exist yet,
-        # the rest of the application can still work.
-        pass
+
+        return False
 
 
 def get_joined_students_count():
-    """
-    Counts students who actually entered the game.
-    """
 
     try:
+
         response = (
             supabase
             .table("students")
@@ -310,7 +319,7 @@ def get_joined_students_count():
         return len(response.data or [])
 
     except Exception:
-        # Fallback
+
         return 0
 
 
@@ -320,7 +329,7 @@ def get_joined_students_count():
 
 def add_question(question, student):
 
-    # First check
+    # الطالب لا يستطيع إرسال أكثر من سؤال
     existing = get_student_question(student)
 
     if existing:
@@ -337,6 +346,7 @@ def add_question(question, student):
         return True
 
     except Exception:
+
         return False
 
 
@@ -353,7 +363,10 @@ def start_question(question_id):
 
     supabase.table("questions").update({
         "used": True
-    }).eq("id", question_id).execute()
+    }).eq(
+        "id",
+        question_id
+    ).execute()
 
     supabase.table("game_state").update({
         "status": "voting",
@@ -361,21 +374,103 @@ def start_question(question_id):
         "voting_ends_at": end_time.isoformat(),
         "question_type": None,
         "score_applied": False
-    }).eq("id", 1).execute()
+    }).eq(
+        "id",
+        1
+    ).execute()
 
 
 def close_voting():
 
     supabase.table("game_state").update({
         "status": "result"
-    }).eq("id", 1).execute()
+    }).eq(
+        "id",
+        1
+    ).execute()
 
 
 def set_question_type(question_type):
 
     supabase.table("game_state").update({
         "question_type": question_type
-    }).eq("id", 1).execute()
+    }).eq(
+        "id",
+        1
+    ).execute()
+
+
+# ============================================================
+# RESET GAME
+# ============================================================
+
+def reset_game():
+
+    """
+    إعادة اللعبة بالكامل من الصفر.
+
+    يتم:
+    1. حذف التصويتات
+    2. حذف الأسئلة
+    3. تصفير النقاط
+    4. تصفير joined_at
+    5. إعادة game_state إلى waiting
+    6. تسجيل خروج الطالب من الجلسة الحالية
+    """
+
+    # حذف التصويتات القديمة
+    supabase.table("votes") \
+        .delete() \
+        .neq("id", 0) \
+        .execute()
+
+    # حذف الأسئلة القديمة
+    supabase.table("questions") \
+        .delete() \
+        .neq("id", 0) \
+        .execute()
+
+    # تصفير الطلاب
+    try:
+
+        supabase.table("students").update({
+            "score": 0,
+            "joined_at": None
+        }).neq(
+            "id",
+            0
+        ).execute()
+
+    except Exception:
+
+        # إذا joined_at غير موجود
+        supabase.table("students").update({
+            "score": 0
+        }).neq(
+            "id",
+            0
+        ).execute()
+
+    # إعادة حالة اللعبة
+    supabase.table("game_state").update({
+
+        "status": "waiting",
+
+        "current_question_id": None,
+
+        "voting_ends_at": None,
+
+        "question_type": None,
+
+        "score_applied": False
+
+    }).eq(
+        "id",
+        1
+    ).execute()
+
+    # تسجيل خروج الطالب الحالي
+    st.session_state.student_name = None
 
 
 # ============================================================
@@ -384,21 +479,26 @@ def set_question_type(question_type):
 
 def submit_vote(question_id, voter, selected):
 
-    # Extra protection before inserting
+    # حماية إضافية
     if has_voted(question_id, voter):
         return False
 
     try:
 
         supabase.table("votes").insert({
+
             "question_id": question_id,
+
             "voter_name": voter,
+
             "selected_name": selected
+
         }).execute()
 
         return True
 
     except Exception:
+
         return False
 
 
@@ -421,7 +521,9 @@ def apply_scores(question_id, question_type):
 
         name = vote["selected_name"]
 
-        counts[name] = counts.get(name, 0) + 1
+        counts[name] = (
+            counts.get(name, 0) + 1
+        )
 
     multiplier = 1
 
@@ -449,12 +551,22 @@ def apply_scores(question_id, question_type):
             )
 
             supabase.table("students").update({
+
                 "score": new_score
-            }).eq("name", name).execute()
+
+            }).eq(
+                "name",
+                name
+            ).execute()
 
     supabase.table("game_state").update({
+
         "score_applied": True
-    }).eq("id", 1).execute()
+
+    }).eq(
+        "id",
+        1
+    ).execute()
 
 
 # ============================================================
@@ -471,7 +583,9 @@ def get_vote_counts(question_id):
 
         name = vote["selected_name"]
 
-        counts[name] = counts.get(name, 0) + 1
+        counts[name] = (
+            counts.get(name, 0) + 1
+        )
 
     return counts
 
@@ -480,17 +594,36 @@ def create_vote_chart(question_id, title):
 
     counts = get_vote_counts(question_id)
 
-    # IMPORTANT:
-    # Only students who received at least one vote
+    # لا يوجد تصويت
     if not counts:
 
-        st.info("لم يتم تسجيل أي تصويت حتى الآن.")
+        st.info(
+            "لم يتم تسجيل أي تصويت حتى الآن."
+        )
+
+        return
+
+    # فقط من حصلوا على صوت واحد أو أكثر
+    counts = {
+        name: count
+        for name, count in counts.items()
+        if count >= 1
+    }
+
+    if not counts:
+
+        st.info(
+            "لم يتم تسجيل أي تصويت حتى الآن."
+        )
 
         return
 
     df = pd.DataFrame({
+
         "الاسم": list(counts.keys()),
+
         "الأصوات": list(counts.values())
+
     })
 
     df = df.sort_values(
@@ -499,22 +632,34 @@ def create_vote_chart(question_id, title):
     )
 
     fig = px.bar(
+
         df,
+
         x="الاسم",
+
         y="الأصوات",
+
         title=title,
+
         text="الأصوات"
+
     )
 
     fig.update_layout(
+
         font=dict(
             family="Cairo",
             size=15
         ),
+
         title_x=0.5,
+
         xaxis_title="",
+
         yaxis_title="عدد الأصوات",
+
         showlegend=False
+
     )
 
     fig.update_traces(
@@ -522,9 +667,13 @@ def create_vote_chart(question_id, title):
     )
 
     st.plotly_chart(
+
         fig,
+
         use_container_width=True,
+
         key=f"chart_{question_id}_{title}"
+
     )
 
 
@@ -535,9 +684,13 @@ def create_vote_chart(question_id, title):
 def generate_qr(url):
 
     qr = qrcode.QRCode(
+
         version=1,
+
         box_size=10,
+
         border=4
+
     )
 
     qr.add_data(url)
@@ -557,6 +710,7 @@ def generate_qr(url):
 
 
 def get_app_url():
+
     return st.context.url
 
 
@@ -569,9 +723,13 @@ def show_question_owner(question):
     key = f"owner_{question['id']}"
 
     if st.button(
+
         "👤 معرفة صاحب السؤال",
+
         key=key,
+
         use_container_width=True
+
     ):
 
         st.info(
@@ -586,6 +744,7 @@ def show_question_owner(question):
 def display_page():
 
     state = get_game_state()
+
 
     # ========================================================
     # WAITING
@@ -610,7 +769,9 @@ def display_page():
 
         qr = generate_qr(student_url)
 
-        col1, col2, col3 = st.columns([1, 2, 1])
+        col1, col2, col3 = st.columns(
+            [1, 2, 1]
+        )
 
         with col2:
 
@@ -620,7 +781,11 @@ def display_page():
             )
 
             st.markdown(
-                "<h3 style='text-align:center;'>امسح QR Code للدخول</h3>",
+                """
+                <h3 style='text-align:center;'>
+                    امسح QR Code للدخول
+                </h3>
+                """,
                 unsafe_allow_html=True
             )
 
@@ -634,20 +799,30 @@ def display_page():
                 unsafe_allow_html=True
             )
 
-        # Live refresh
+
+        # تحديث عدد المشاركين والأسئلة
         st_autorefresh(
             interval=2000,
             key="display_waiting_refresh"
         )
 
-        joined_count = get_joined_students_count()
+
+        joined_count = (
+            get_joined_students_count()
+        )
 
         questions = get_questions()
 
         unused = [
-            q for q in questions
+            q
+            for q in questions
             if not q["used"]
         ]
+
+
+        # ====================================================
+        # STATS
+        # ====================================================
 
         col1, col2, col3 = st.columns(3)
 
@@ -656,8 +831,15 @@ def display_page():
             st.markdown(
                 f"""
                 <div class="stat-card">
-                    <div class="stat-number">{joined_count}</div>
-                    <div class="stat-label">المشاركون</div>
+
+                    <div class="stat-number">
+                        {joined_count}
+                    </div>
+
+                    <div class="stat-label">
+                        المشاركون
+                    </div>
+
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -668,8 +850,15 @@ def display_page():
             st.markdown(
                 f"""
                 <div class="stat-card">
-                    <div class="stat-number">{len(questions)}</div>
-                    <div class="stat-label">الأسئلة المكتوبة</div>
+
+                    <div class="stat-number">
+                        {len(questions)}
+                    </div>
+
+                    <div class="stat-label">
+                        الأسئلة المكتوبة
+                    </div>
+
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -680,14 +869,23 @@ def display_page():
             st.markdown(
                 f"""
                 <div class="stat-card">
-                    <div class="stat-number">{len(unused)}</div>
-                    <div class="stat-label">الأسئلة المتبقية</div>
+
+                    <div class="stat-number">
+                        {len(unused)}
+                    </div>
+
+                    <div class="stat-label">
+                        الأسئلة المتبقية
+                    </div>
+
                 </div>
                 """,
                 unsafe_allow_html=True
             )
 
+
         st.divider()
+
 
         if not unused:
 
@@ -695,15 +893,22 @@ def display_page():
                 "لا توجد أسئلة جاهزة لبدء الفعالية."
             )
 
+
         if st.button(
+
             "🚀 ابدأ الفعالية",
+
             use_container_width=True,
+
             type="primary"
+
         ):
 
             if unused:
 
-                question = random.choice(unused)
+                question = random.choice(
+                    unused
+                )
 
                 start_question(
                     question["id"]
@@ -723,21 +928,30 @@ def display_page():
         )
 
         if not question:
-            st.error("تعذر العثور على السؤال.")
+
+            st.error(
+                "تعذر العثور على السؤال."
+            )
+
             return
 
+
         end_time = datetime.fromisoformat(
+
             state["voting_ends_at"].replace(
                 "Z",
                 "+00:00"
             )
+
         )
 
         remaining = int(
+
             (
                 end_time
                 - datetime.now(timezone.utc)
             ).total_seconds()
+
         )
 
         remaining = max(
@@ -745,12 +959,15 @@ def display_page():
             remaining
         )
 
+
         st.markdown(
             '<div class="main-title">مين أكثر؟</div>',
             unsafe_allow_html=True
         )
 
+
         st.markdown(
+
             f"""
             <div class="question-card">
 
@@ -768,25 +985,36 @@ def display_page():
 
             </div>
             """,
+
             unsafe_allow_html=True
+
         )
 
-        # Live chart
+
+        # الرسم يتحدث مع كل refresh
         create_vote_chart(
+
             question["id"],
+
             "التصويت الحالي"
+
         )
 
-        # Automatically close voting
+
+        # إغلاق تلقائي
         if remaining <= 0:
 
             close_voting()
 
             st.rerun()
 
+
         st_autorefresh(
+
             interval=1000,
+
             key=f"display_voting_{question['id']}"
+
         )
 
 
@@ -801,38 +1029,63 @@ def display_page():
         )
 
         if not question:
-            st.error("تعذر العثور على السؤال.")
+
+            st.error(
+                "تعذر العثور على السؤال."
+            )
+
             return
+
 
         st.markdown(
             '<div class="main-title">النتيجة 🎉</div>',
             unsafe_allow_html=True
         )
 
+
         st.markdown(
+
             f"""
             <div class="question-card">
+
                 <div class="question-text">
                     {question["question"]}
                 </div>
+
             </div>
             """,
+
             unsafe_allow_html=True
+
         )
 
-        # Owner button for THIS question only
+
+        # معرفة صاحب هذا السؤال فقط
         show_question_owner(question)
 
+
         st.divider()
 
+
+        # نتيجة التصويت
         create_vote_chart(
+
             question["id"],
+
             "نتيجة التصويت"
+
         )
 
+
         st.divider()
 
+
         state = get_game_state()
+
+
+        # ====================================================
+        # QUESTION TYPE
+        # ====================================================
 
         if not state["question_type"]:
 
@@ -842,12 +1095,17 @@ def display_page():
 
             col1, col2 = st.columns(2)
 
+
             with col1:
 
                 if st.button(
+
                     "إيجابي +",
+
                     use_container_width=True,
+
                     type="primary"
+
                 ):
 
                     set_question_type(
@@ -855,17 +1113,24 @@ def display_page():
                     )
 
                     apply_scores(
+
                         question["id"],
+
                         "positive"
+
                     )
 
                     st.rerun()
+
 
             with col2:
 
                 if st.button(
+
                     "سلبي -",
+
                     use_container_width=True
+
                 ):
 
                     set_question_type(
@@ -873,11 +1138,15 @@ def display_page():
                     )
 
                     apply_scores(
+
                         question["id"],
+
                         "negative"
+
                     )
 
                     st.rerun()
+
 
         else:
 
@@ -885,19 +1154,30 @@ def display_page():
                 "تم تحديث النقاط بنجاح."
             )
 
+
             questions = get_questions()
 
             unused = [
-                q for q in questions
+
+                q
+
+                for q in questions
+
                 if not q["used"]
+
             ]
+
 
             if unused:
 
                 if st.button(
+
                     "السؤال التالي ➜",
+
                     use_container_width=True,
+
                     type="primary"
+
                 ):
 
                     next_question = random.choice(
@@ -910,20 +1190,28 @@ def display_page():
 
                     st.rerun()
 
+
             else:
 
                 if st.button(
+
                     "عرض النتائج النهائية",
+
                     use_container_width=True,
+
                     type="primary"
+
                 ):
 
                     supabase.table(
                         "game_state"
                     ).update({
+
                         "status": "finished"
+
                     }).eq(
-                        "id", 1
+                        "id",
+                        1
                     ).execute()
 
                     st.rerun()
@@ -940,52 +1228,120 @@ def display_page():
             unsafe_allow_html=True
         )
 
+
         students = get_students()
 
         df = pd.DataFrame(students)
 
+
         if df.empty:
-            st.info("لا توجد نتائج.")
+
+            st.info(
+                "لا توجد نتائج."
+            )
+
             return
 
+
         df = df.sort_values(
+
             "score",
+
             ascending=False
+
         )
+
 
         fig = px.bar(
+
             df,
+
             x="name",
+
             y="score",
+
             title="النقاط النهائية",
+
             text="score"
+
         )
 
+
         fig.update_layout(
+
             font=dict(
+
                 family="Cairo",
+
                 size=15
+
             ),
+
             title_x=0.5,
+
             xaxis_title="",
+
             yaxis_title="النقاط",
+
             showlegend=False
+
         )
+
 
         fig.update_traces(
             textposition="outside"
         )
 
+
         st.plotly_chart(
+
             fig,
+
             use_container_width=True
+
         )
 
+
         st.dataframe(
+
             df[["name", "score"]],
+
             use_container_width=True,
+
             hide_index=True
+
         )
+
+
+        # ====================================================
+        # RESET GAME
+        # ====================================================
+
+        st.divider()
+
+        st.subheader(
+            "بدء فعالية جديدة"
+        )
+
+        st.write(
+            "سيتم حذف أسئلة وتصويتات الفعالية الحالية "
+            "وتصفير النقاط."
+        )
+
+
+        if st.button(
+
+            "🔄 إعادة اللعبة",
+
+            use_container_width=True,
+
+            type="primary"
+
+        ):
+
+            reset_game()
+
+            st.rerun()
 
 
 # ============================================================
@@ -993,6 +1349,7 @@ def display_page():
 # ============================================================
 
 def student_page():
+
 
     # ========================================================
     # LOGIN
@@ -1010,6 +1367,7 @@ def student_page():
             unsafe_allow_html=True
         )
 
+
         students = get_students()
 
         names = [
@@ -1017,24 +1375,35 @@ def student_page():
             for s in students
         ]
 
+
         selected = st.selectbox(
+
             "الاسم",
+
             names,
+
             index=None,
+
             placeholder="اختاري اسمك..."
+
         )
 
+
         if st.button(
+
             "دخول",
+
             use_container_width=True,
+
             type="primary"
+
         ):
 
             if selected:
 
                 st.session_state.student_name = selected
 
-                # Save permanent entry state
+                # حفظ دخول الطالب
                 mark_student_joined(
                     selected
                 )
@@ -1047,6 +1416,7 @@ def student_page():
                     "اختاري اسمك أولًا."
                 )
 
+
         return
 
 
@@ -1058,13 +1428,17 @@ def student_page():
 
     state = get_game_state()
 
+
     st.markdown(
+
         f"""
         <div class="main-title">
             مرحبًا {student}
         </div>
         """,
+
         unsafe_allow_html=True
+
     )
 
 
@@ -1075,37 +1449,64 @@ def student_page():
     if state["status"] == "waiting":
 
         st_autorefresh(
+
             interval=2000,
+
             key="student_waiting_refresh"
+
         )
+
 
         previous_question = get_student_question(
             student
         )
 
+
         if previous_question:
 
             st.markdown(
+
                 """
                 <div class="success-card">
+
                     <h3>✓ تم إرسال سؤالك</h3>
-                    <p>لا يمكنك إرسال سؤال آخر.</p>
-                    <p>انتظري حتى تبدأ الجولة.</p>
+
+                    <p>
+                        لا يمكنك إرسال سؤال آخر.
+                    </p>
+
+                    <p>
+                        انتظري حتى تبدأ الجولة.
+                    </p>
+
                 </div>
                 """,
+
                 unsafe_allow_html=True
+
             )
 
+
             st.markdown(
+
                 f"""
                 <div class="question-card">
-                    <strong>سؤالك:</strong>
+
+                    <strong>
+                        سؤالك:
+                    </strong>
+
                     <br><br>
+
                     {previous_question["question"]}
+
                 </div>
                 """,
+
                 unsafe_allow_html=True
+
             )
+
 
         else:
 
@@ -1113,19 +1514,33 @@ def student_page():
                 "اكتبي سؤالًا واحدًا فقط للعبة."
             )
 
+
             question = st.text_area(
+
                 "السؤال",
-                placeholder="مثال: مين أكثر شخص ممكن ودك تشتغل معه من جديد؟",
+
+                placeholder=(
+                    "مثال: مين أكثر شخص ممكن "
+                    "ودك تشتغل معه من جديد؟"
+                ),
+
                 height=120
+
             )
 
+
             if st.button(
+
                 "إرسال السؤال",
+
                 use_container_width=True,
+
                 type="primary"
+
             ):
 
                 question = question.strip()
+
 
                 if not question:
 
@@ -1133,12 +1548,17 @@ def student_page():
                         "اكتبي السؤال أولًا."
                     )
 
+
                 else:
 
                     success = add_question(
+
                         question,
+
                         student
+
                     )
+
 
                     if success:
 
@@ -1147,6 +1567,7 @@ def student_page():
                         )
 
                         st.rerun()
+
 
                     else:
 
@@ -1162,44 +1583,69 @@ def student_page():
     elif state["status"] == "voting":
 
         question = get_current_question(
+
             state["current_question_id"]
+
         )
 
+
         if not question:
-            st.error("تعذر العثور على السؤال.")
+
+            st.error(
+                "تعذر العثور على السؤال."
+            )
+
             return
 
+
         end_time = datetime.fromisoformat(
+
             state["voting_ends_at"].replace(
                 "Z",
                 "+00:00"
             )
+
         )
+
 
         remaining = int(
+
             (
+
                 end_time
                 - datetime.now(timezone.utc)
+
             ).total_seconds()
+
         )
+
 
         remaining = max(
+
             0,
+
             remaining
+
         )
 
+
         st.markdown(
+
             f"""
             <div class="question-card">
 
                 <div class="question-text"
                      style="font-size:1.8rem;">
+
                     {question["question"]}
+
                 </div>
 
                 <div class="timer"
                      style="font-size:3rem;">
+
                     {remaining}
+
                 </div>
 
                 <div>
@@ -1208,32 +1654,48 @@ def student_page():
 
             </div>
             """,
+
             unsafe_allow_html=True
+
         )
 
-        # Check persistent vote
+
         already_voted = has_voted(
+
             question["id"],
+
             student
+
         )
+
 
         if already_voted:
 
             st.markdown(
+
                 """
                 <div class="success-card">
+
                     <h3>✓ تم تسجيل تصويتك</h3>
-                    <p>انتظري ظهور النتيجة.</p>
+
+                    <p>
+                        انتظري ظهور النتيجة.
+                    </p>
+
                 </div>
                 """,
+
                 unsafe_allow_html=True
+
             )
+
 
         elif remaining <= 0:
 
             st.warning(
                 "انتهى وقت التصويت."
             )
+
 
         else:
 
@@ -1244,18 +1706,31 @@ def student_page():
                 for s in students
             ]
 
-            # Dropdown instead of showing all names
+
+            # قائمة منسدلة بدل عرض جميع الأسماء
             selected = st.selectbox(
+
                 "اختاري اللاعب",
+
                 names,
+
                 index=None,
-                placeholder="اختاري اسم اللاعب..."
+
+                placeholder=(
+                    "اختاري اسم اللاعب..."
+                )
+
             )
 
+
             if st.button(
+
                 "تصويت",
+
                 use_container_width=True,
+
                 type="primary"
+
             ):
 
                 if not selected:
@@ -1267,10 +1742,15 @@ def student_page():
                 else:
 
                     success = submit_vote(
+
                         question["id"],
+
                         student,
+
                         selected
+
                     )
+
 
                     if success:
 
@@ -1280,15 +1760,20 @@ def student_page():
 
                         st.rerun()
 
+
                     else:
 
                         st.warning(
                             "سبق لك التصويت في هذا السؤال."
                         )
 
+
         st_autorefresh(
+
             interval=1000,
+
             key=f"student_voting_{question['id']}"
+
         )
 
 
@@ -1299,18 +1784,32 @@ def student_page():
     elif state["status"] == "result":
 
         st.markdown(
+
             """
             <div class="success-card">
-                <h3>انتهى التصويت ✓</h3>
-                <p>انتظري السؤال التالي.</p>
+
+                <h3>
+                    انتهى التصويت ✓
+                </h3>
+
+                <p>
+                    انتظري السؤال التالي.
+                </p>
+
             </div>
             """,
+
             unsafe_allow_html=True
+
         )
 
+
         st_autorefresh(
+
             interval=2000,
+
             key="student_result_refresh"
+
         )
 
 
@@ -1324,20 +1823,32 @@ def student_page():
             "انتهت الفعالية! 🏆"
         )
 
+
         students = get_students()
 
         df = pd.DataFrame(students)
 
-        df = df.sort_values(
-            "score",
-            ascending=False
-        )
 
-        st.dataframe(
-            df[["name", "score"]],
-            use_container_width=True,
-            hide_index=True
-        )
+        if not df.empty:
+
+            df = df.sort_values(
+
+                "score",
+
+                ascending=False
+
+            )
+
+
+            st.dataframe(
+
+                df[["name", "score"]],
+
+                use_container_width=True,
+
+                hide_index=True
+
+            )
 
 
 # ============================================================
@@ -1348,6 +1859,7 @@ page = st.query_params.get(
     "page",
     "display"
 )
+
 
 if page == "student":
 
