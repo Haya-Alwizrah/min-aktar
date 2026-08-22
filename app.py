@@ -9,7 +9,7 @@ from supabase import create_client
 from streamlit_autorefresh import st_autorefresh
 
 # CONFIG --------------------------------------------------------------------------------------------------------------------------------------
-st.set_page_config(page_title="مين أكثر؟", page_icon="🎉", ayout="wide")
+st.set_page_config(page_title="مين أكثر؟", page_icon="🎉", layout="wide")
 VOTING_SECONDS = 10
 
 # SUPABASE --------------------------------------------------------------------------------------------------------------------------------------
